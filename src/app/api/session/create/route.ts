@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { signToken } from "@/lib/jwt";
 import crypto from "crypto";
 
 function generateOrderId(): string {
