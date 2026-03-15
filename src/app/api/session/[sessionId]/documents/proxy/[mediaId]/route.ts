@@ -15,9 +15,15 @@ export async function GET(
     }
 
     const apiKey = process.env.VERIFF_API_KEY;
-    const apiSecret = process.env.VERIFF_API_SECRET || process.env.VERIFF_WEBHOOK_SECRET;
+    const apiSecret = process.env.VERIFF_API_SECRET;
     if (!apiKey || !apiSecret) {
-      return NextResponse.json({ error: "Veriff non configuré" }, { status: 500 });
+      return NextResponse.json(
+        {
+          error: "Veriff non configuré",
+          details: "VERIFF_API_KEY et VERIFF_API_SECRET sont requis",
+        },
+        { status: 500 }
+      );
     }
 
     const supabase = createServiceClient();

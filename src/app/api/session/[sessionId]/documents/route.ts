@@ -101,7 +101,7 @@ export async function GET(
 
     // Documents Veriff (KYC) des signataires
     const apiKey = process.env.VERIFF_API_KEY;
-    const apiSecret = process.env.VERIFF_API_SECRET || process.env.VERIFF_WEBHOOK_SECRET;
+    const apiSecret = process.env.VERIFF_API_SECRET;
 
     if (apiKey && apiSecret) {
       const { data: signers } = await supabase

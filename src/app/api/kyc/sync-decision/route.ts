@@ -26,10 +26,15 @@ export async function POST(request: NextRequest) {
     }
 
     const apiKey = process.env.VERIFF_API_KEY;
-    const apiSecret = process.env.VERIFF_API_SECRET || process.env.VERIFF_WEBHOOK_SECRET;
+    // Veriff decision endpoint signature must use Integration API Secret,
+    // not webhook secret.
+    const apiSecret = process.env.VERIFF_API_SECRET;
     if (!apiKey || !apiSecret) {
       return NextResponse.json(
-        { error: "Veriff non configuré" },
+        {
+          error: "Veriff non configuré",
+          details: "VERIFF_API_KEY et VERIFF_API_SECRET sont requis",
+        },
         { status: 500 }
       );
     }
