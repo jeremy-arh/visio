@@ -64,6 +64,7 @@ interface YousignDocument {
 
 interface YousignSigner {
   id: string;
+  status?: string;
   signature_link?: string;
 }
 
@@ -276,13 +277,29 @@ export async function GET(
       );
     }
 
-    const signerData = await yousignJson<YousignSigner>(
+    let signerData = await yousignJson<YousignSigner>(
       `/signature_requests/${signatureRequestId}/signers/${ysSignerId}`
     );
 
+    // Fallback: depending on account/version, link can be available on /signers/{id}
+    // while being null on the nested signature_request signer endpoint.
+    if (!signerData.signature_link) {
+      try {
+        const byId = await yousignJson<YousignSigner>(`/signers/${ysSignerId}`);
+        if (byId.signature_link) {
+          signerData = { ...signerData, ...byId };
+        }
+      } catch {
+        // Keep original payload; the caller will receive a precise status below.
+      }
+    }
+
     if (!signerData.signature_link) {
       return NextResponse.json(
-        { error: "signature_link absent dans la reponse Yousign" },
+        {
+          error: "signature_link absent dans la reponse Yousign",
+          signerStatus: signerData.status || null,
+        },
         { status: 502 }
       );
     }
