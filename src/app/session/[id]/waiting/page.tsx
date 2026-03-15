@@ -36,7 +36,12 @@ export default async function WaitingPage({
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-8">
-      <WaitingClient sessionId={id} status={session.status} token={token || ""} />
+      <WaitingClient
+        sessionId={id}
+        signerId={signerId}
+        status={session.status}
+        token={token || ""}
+      />
     </main>
   );
 }

@@ -18,10 +18,12 @@ const STATUS_LABELS: Record<string, string> = {
 
 export function WaitingClient({
   sessionId,
+  signerId,
   status: initialStatus,
   token,
 }: {
   sessionId: string;
+  signerId: string;
   status: string;
   token: string;
 }) {
@@ -57,6 +59,43 @@ export function WaitingClient({
       supabase.removeChannel(channel);
     };
   }, [sessionId, token, router]);
+
+  // Fallback polling: sync KYC decision from Veriff in case webhook is not delivered.
+  useEffect(() => {
+    if (!signerId) return;
+    if (!["pending_kyc", "kyc_complete", "waiting_notary"].includes(status)) return;
+
+    let cancelled = false;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch("/api/kyc/sync-decision", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionId, signerId }),
+        });
+        if (!res.ok || cancelled) return;
+
+        const data = (await res.json()) as {
+          signerStatus?: string;
+          sessionStatus?: string | null;
+        };
+
+        if (data.sessionStatus) {
+          setStatus(data.sessionStatus);
+          if (["in_session", "signing", "notary_stamping"].includes(data.sessionStatus)) {
+            router.push(`/session/${sessionId}/room?token=${token}`);
+          }
+        }
+      } catch {
+        // Keep waiting silently; realtime flow still exists.
+      }
+    }, 6000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [sessionId, signerId, status, token, router]);
 
   return (
     <Card className="w-full max-w-md">
