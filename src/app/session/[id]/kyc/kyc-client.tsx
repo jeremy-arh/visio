@@ -49,7 +49,7 @@ export function KycClient({
     setLoading(true);
     setVeriffError(null);
     try {
-      const callbackUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/session/${sessionId}/waiting${token ? `?token=${token}` : ""}`;
+      const callbackUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/session/${sessionId}/kyc/loading${token ? `?token=${token}` : ""}`;
       const res = await fetch("/api/kyc/veriff-session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

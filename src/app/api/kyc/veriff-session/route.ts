@@ -44,7 +44,9 @@ export async function POST(request: NextRequest) {
       },
       body: JSON.stringify({
         verification: {
-          callback: callbackUrl || `${process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin}/session/${sessionId}/waiting`,
+          callback:
+            callbackUrl ||
+            `${process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin}/session/${sessionId}/kyc/loading`,
           person: {
             firstName: firstName || "Signataire",
             lastName: lastName || "Session",
