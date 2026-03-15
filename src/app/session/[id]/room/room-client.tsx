@@ -327,6 +327,7 @@ export function RoomClient({
             if (!cancelled) {
               setYousignEmbedUrl(payload.embedUrl);
               setYousignError(null);
+              setYousignLoading(false);
             }
             return;
           }
@@ -344,6 +345,7 @@ export function RoomClient({
 
       if (!cancelled) {
         setYousignError(lastError);
+        setYousignLoading(false);
       }
     };
 
