@@ -295,6 +295,21 @@ export async function GET(
     }
 
     if (!signerData.signature_link) {
+      const normalizedSignerStatus = String(signerData.status || "").toLowerCase();
+      if (normalizedSignerStatus === "signed") {
+        await supabase
+          .from("session_signers")
+          .update({ signed_at: new Date().toISOString() })
+          .eq("id", signerId)
+          .is("signed_at", null);
+
+        return NextResponse.json({
+          signed: true,
+          signerStatus: signerData.status || "signed",
+          message: "Document deja signe pour ce signataire.",
+        });
+      }
+
       return NextResponse.json(
         {
           error: "signature_link absent dans la reponse Yousign",

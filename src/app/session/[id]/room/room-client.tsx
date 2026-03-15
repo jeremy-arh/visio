@@ -321,7 +321,21 @@ export function RoomClient({
             `/api/session/${sessionId}/yousign-embed?signerId=${encodeURIComponent(signerId)}&token=${encodeURIComponent(token)}`,
             { cache: "no-store" }
           );
-          const payload = (await res.json()) as { embedUrl?: string; error?: string };
+          const payload = (await res.json()) as {
+            embedUrl?: string;
+            error?: string;
+            signed?: boolean;
+            message?: string;
+          };
+
+          if (res.ok && payload.signed) {
+            if (!cancelled) {
+              setYousignEmbedUrl(null);
+              setYousignError(payload.message || "Signature deja finalisee.");
+              setYousignLoading(false);
+            }
+            return;
+          }
 
           if (res.ok && payload.embedUrl) {
             if (!cancelled) {
