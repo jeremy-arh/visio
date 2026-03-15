@@ -20,33 +20,72 @@ export async function POST(request: NextRequest) {
 
     const data = JSON.parse(body);
     const verification = data?.verification;
+    const verificationId = verification?.id as string | undefined;
     const status = verification?.status;
     const code = verification?.code;
-    const vendorData = verification?.vendorData;
-
-    if (!vendorData) {
-      return NextResponse.json({ received: true });
-    }
-
-    const signerId = vendorData;
+    const vendorData = verification?.vendorData || verification?.endUserId;
     const supabase = createServiceClient();
 
-    const approved = code === 9001 || status === "approved";
+    // Veriff decision payloads can vary by version:
+    // - verification.status can be approved/declined/resubmission_requested
+    // - verification.code can be 9001 for approved
+    const normalizedStatus = String(status || "").toLowerCase();
+    const normalizedCode = String(code || "");
+    const approved = normalizedStatus === "approved" || normalizedCode === "9001";
 
-    const { data: signer } = await supabase
-      .from("session_signers")
-      .select("id, session_id")
-      .eq("id", signerId)
-      .single();
+    let signer:
+      | {
+          id: string;
+          session_id: string;
+        }
+      | null = null;
+
+    if (vendorData) {
+      const { data: signerFromVendor } = await supabase
+        .from("session_signers")
+        .select("id, session_id")
+        .eq("id", vendorData)
+        .single();
+      signer = signerFromVendor || null;
+    }
+
+    // Fallback: if vendorData is missing/unexpected, resolve via Veriff session id
+    if (!signer && verificationId) {
+      const { data: signerFromVeriff } = await supabase
+        .from("session_signers")
+        .select("id, session_id")
+        .eq("veriff_session_id", verificationId)
+        .single();
+      signer = signerFromVeriff || null;
+    }
 
     if (!signer) {
+      console.warn("[KYC webhook] signer not found", {
+        vendorData,
+        verificationId,
+        status,
+        code,
+      });
       return NextResponse.json({ received: true });
     }
 
-    await supabase
+    console.log("[KYC webhook] signer resolved", {
+      signerId: signer.id,
+      sessionId: signer.session_id,
+      vendorData,
+      verificationId,
+      approved,
+    });
+
+    const { error: signerUpdateError } = await supabase
       .from("session_signers")
       .update({ kyc_status: approved ? "approved" : "declined" })
-      .eq("id", signerId);
+      .eq("id", signer.id);
+
+    if (signerUpdateError) {
+      console.error("[KYC webhook] signer update failed", signerUpdateError);
+      return NextResponse.json({ error: "Signer update failed" }, { status: 500 });
+    }
 
     if (approved) {
       const { data: signers } = await supabase
