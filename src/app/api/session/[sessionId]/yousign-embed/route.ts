@@ -2,7 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { verifyToken } from "@/lib/jwt";
 
-const YOUSIGN_BASE = process.env.YOUSIGN_API_URL || "https://api-sandbox.yousign.app/v3";
+const sanitizeYousignBase = (raw?: string) => {
+  const value = (raw || "").trim().replace(/\/+$/, "");
+  if (!value) return "https://api-sandbox.yousign.app/v3";
+  // Legacy endpoint alias often configured by mistake.
+  if (value.includes("staging-api.yousign.app")) return "https://api-sandbox.yousign.app/v3";
+  return value;
+};
+
+const YOUSIGN_BASE = sanitizeYousignBase(process.env.YOUSIGN_API_URL);
 
 async function yousignFetch(path: string, options: RequestInit = {}): Promise<Response> {
   const apiKey = process.env.YOUSIGN_API_KEY;
