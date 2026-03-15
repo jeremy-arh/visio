@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServiceClient } from "@/lib/supabase/service";
-import { verifyToken } from "@/lib/jwt";
+import { createServerClient } from "@supabase/ssr";
+import { createServiceClient } from "@/lib/supabase";
 import {
   advanceSigningWorkflow,
   getExpectedSignature,
@@ -32,7 +32,10 @@ const buildEmbedUrl = (signatureLink: string) => {
   }
 };
 
-async function yousignFetch(path: string, options: RequestInit = {}): Promise<Response> {
+async function yousignFetch(
+  path: string,
+  options: RequestInit = {}
+): Promise<Response> {
   const apiKey = process.env.YOUSIGN_API_KEY;
   if (!apiKey) throw new Error("YOUSIGN_API_KEY manquant");
   return fetch(`${YOUSIGN_BASE}${path}`, {
@@ -45,7 +48,10 @@ async function yousignFetch(path: string, options: RequestInit = {}): Promise<Re
   });
 }
 
-async function yousignJson<T>(path: string, options: RequestInit = {}): Promise<T> {
+async function yousignJson<T>(
+  path: string,
+  options: RequestInit = {}
+): Promise<T> {
   const res = await yousignFetch(path, options);
   const text = await res.text();
   let body: unknown;
@@ -55,6 +61,7 @@ async function yousignJson<T>(path: string, options: RequestInit = {}): Promise<
     body = text;
   }
   if (!res.ok) {
+    console.error(`[Yousign] ${options.method || "GET"} ${path} -> ${res.status}`, body);
     throw new Error(`Yousign ${res.status}: ${JSON.stringify(body)}`);
   }
   return body as T;
@@ -83,17 +90,20 @@ async function initYousign(params: {
   const { supabase, orderId, documentUrl, context } = params;
   const customExperienceId = process.env.YOUSIGN_CUSTOM_EXPERIENCE_ID?.trim();
 
-  const signatureRequest = await yousignJson<YousignSignatureRequest>("/signature_requests", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      name: `Notarisation ${orderId}`,
-      delivery_mode: "none",
-      ordered_signers: true,
-      timezone: "Europe/Paris",
-      ...(customExperienceId ? { custom_experience_id: customExperienceId } : {}),
-    }),
-  });
+  const signatureRequest = await yousignJson<YousignSignatureRequest>(
+    "/signature_requests",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: `Notarisation ${orderId}`,
+        delivery_mode: "none",
+        ordered_signers: true,
+        timezone: "Europe/Paris",
+        ...(customExperienceId ? { custom_experience_id: customExperienceId } : {}),
+      }),
+    }
+  );
 
   const docResponse = await fetch(documentUrl, { cache: "no-store" });
   if (!docResponse.ok) {
@@ -217,67 +227,80 @@ export async function GET(
 ) {
   try {
     const { sessionId } = await params;
-    const signerId = request.nextUrl.searchParams.get("signerId");
-    if (!signerId) {
-      return NextResponse.json({ error: "signerId manquant" }, { status: 400 });
-    }
     if (!process.env.YOUSIGN_API_KEY) {
       return NextResponse.json({ error: "YOUSIGN_API_KEY non configuree" }, { status: 500 });
     }
 
-    const token =
-      request.nextUrl.searchParams.get("token") ||
-      request.cookies.get("session_token")?.value ||
-      "";
-    const payload = token ? await verifyToken(token) : null;
-    if (!payload || payload.role !== "signer") {
+    const authResponse = NextResponse.next();
+    const authSupabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll();
+          },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              authResponse.cookies.set(name, value, options)
+            );
+          },
+        },
+      }
+    );
+
+    const {
+      data: { user },
+    } = await authSupabase.auth.getUser();
+    if (!user?.email) {
       return NextResponse.json({ error: "Non authentifie" }, { status: 401 });
     }
-    if (payload.sessionId !== sessionId || payload.signerId !== signerId) {
-      return NextResponse.json({ error: "Acces refuse" }, { status: 403 });
+    const role = (user.user_metadata?.role as string | undefined)?.toLowerCase();
+    if (role !== "notary") {
+      return NextResponse.json({ error: "Acces reserve aux notaires" }, { status: 403 });
     }
 
     const supabase = createServiceClient();
-    let context = await advanceSigningWorkflow(supabase, sessionId);
-    if (!context || !context.currentDocument) {
+    const [{ data: notariesPlural }, { data: notarySingular }] = await Promise.all([
+      supabase.from("notaries").select("id, email").eq("email", user.email),
+      supabase.from("notary").select("id, email, user_id").or(`email.eq.${user.email},user_id.eq.${user.id}`),
+    ]);
+    const notaryIds = new Set([
+      ...(notariesPlural || []).map((n) => n.id),
+      ...(notarySingular || []).map((n) => n.id),
+    ]);
+    if (!notaryIds.size) {
+      return NextResponse.json({ error: "Notaire non autorise" }, { status: 403 });
+    }
+
+    const context = await advanceSigningWorkflow(supabase, sessionId);
+    if (!context || !context.session) {
+      return NextResponse.json({ error: "Session introuvable" }, { status: 404 });
+    }
+    if (context.session.notary_id && !notaryIds.has(context.session.notary_id)) {
+      return NextResponse.json({ error: "Session non assignee a ce notaire" }, { status: 403 });
+    }
+    if (!context.currentDocument) {
       return NextResponse.json(
-        {
-          completed: true,
-          message: "Tous les documents sont finalisés.",
-        },
+        { completed: true, message: "Tous les documents sont finalisés." },
         { status: 200 }
       );
     }
 
     const expected = getExpectedSignature(context.signatures);
-    if (!expected) {
-      context = await advanceSigningWorkflow(supabase, sessionId);
-      return NextResponse.json(
-        { waiting: true, message: "Transition de workflow en cours." },
-        { status: 409 }
-      );
-    }
-
-    if (expected.role !== "signer") {
+    if (!expected || expected.role !== "notary") {
       return NextResponse.json(
         {
           waiting: true,
-          code: "waiting_for_notary",
-          message: "Le notaire doit signer ce document avant de poursuivre.",
+          code: "waiting_for_signers",
+          message: "En attente de la signature de tous les signataires.",
         },
         { status: 409 }
       );
     }
 
-    if (expected.session_signer_id !== signerId) {
-      return NextResponse.json(
-        {
-          waiting: true,
-          code: "waiting_for_others",
-          message: "Ce n'est pas encore votre tour de signer.",
-        },
-        { status: 409 }
-      );
+    if (!expected.notary_id || !notaryIds.has(expected.notary_id)) {
+      return NextResponse.json({ error: "Notaire courant non autorisé pour cette étape" }, { status: 403 });
     }
 
     let signatureRequestId = context.currentDocument.yousign_signature_request_id;
@@ -314,7 +337,7 @@ export async function GET(
 
     if (!signatureRequestId || !expectedSignatureRow.yousign_signer_id) {
       return NextResponse.json(
-        { error: "Impossible d'initialiser le signataire Yousign courant" },
+        { error: "Impossible d'initialiser la signature notaire courante" },
         { status: 409 }
       );
     }
@@ -354,7 +377,7 @@ export async function GET(
         return NextResponse.json({
           signed: true,
           signerStatus: signerData.status || "signed",
-          message: "Document deja signe pour ce signataire.",
+          message: "Signature et tampon notaire finalisés pour ce document.",
           nextActor: expectedAfterAdvance
             ? {
                 role: expectedAfterAdvance.role,
@@ -390,6 +413,7 @@ export async function GET(
       documentId: context.currentDocument.id,
       documentLabel: context.currentDocument.label,
       documentOrder: context.currentDocument.document_order,
+      stage: "notary_signing_and_stamping",
     });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);

@@ -3,10 +3,28 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { signToken } from "@/lib/jwt";
 import crypto from "crypto";
 
+type SessionDocumentSeed = {
+  label: string;
+  source: "session" | "submission";
+  source_url: string;
+};
+
 function generateOrderId(): string {
   const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
   const random = crypto.randomBytes(4).toString("hex").toUpperCase();
   return `ORD-${date}-${random}`;
+}
+
+function dedupeDocuments(items: SessionDocumentSeed[]): SessionDocumentSeed[] {
+  const seen = new Set<string>();
+  const unique: SessionDocumentSeed[] = [];
+  for (const item of items) {
+    const key = item.source_url.trim();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    unique.push(item);
+  }
+  return unique;
 }
 
 export async function POST(request: NextRequest) {
@@ -124,6 +142,142 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Construire les documents de session pour le workflow par document.
+    const documentSeeds: SessionDocumentSeed[] = [];
+    if (resolvedDocumentUrl) {
+      documentSeeds.push({
+        label: "Document à notariser",
+        source: "session",
+        source_url: resolvedDocumentUrl,
+      });
+    }
+
+    if (submission_id) {
+      const [{ data: submissionData }, { data: submissionFiles }, { data: notarizedFiles }] = await Promise.all([
+        supabase.from("submission").select("data").eq("id", submission_id).single(),
+        supabase
+          .from("submission_files")
+          .select("id, file_name, file_url")
+          .eq("submission_id", submission_id)
+          .order("created_at", { ascending: true }),
+        supabase
+          .from("notarized_files")
+          .select("id, file_name, file_url")
+          .eq("submission_id", submission_id)
+          .order("created_at", { ascending: true }),
+      ]);
+
+      const docsMap = submissionData?.data?.documents || submissionData?.data?.serviceDocuments || {};
+      for (const [serviceName, files] of Object.entries(docsMap)) {
+        const fileList = Array.isArray(files) ? files : [];
+        for (const file of fileList as { url?: string; name?: string }[]) {
+          if (!file.url) continue;
+          documentSeeds.push({
+            label: file.name || serviceName || "Document",
+            source: "submission",
+            source_url: file.url,
+          });
+        }
+      }
+
+      for (const file of submissionFiles || []) {
+        if (!file.file_url) continue;
+        documentSeeds.push({
+          label: file.file_name || "Document submission",
+          source: "submission",
+          source_url: file.file_url,
+        });
+      }
+
+      for (const file of notarizedFiles || []) {
+        if (!file.file_url) continue;
+        documentSeeds.push({
+          label: file.file_name || "Document notarisé",
+          source: "submission",
+          source_url: file.file_url,
+        });
+      }
+    }
+
+    const workflowDocuments = dedupeDocuments(documentSeeds);
+    if (!workflowDocuments.length) {
+      await supabase.from("session_signers").delete().eq("session_id", session.id);
+      await supabase.from("notarization_sessions").delete().eq("id", session.id);
+      return NextResponse.json(
+        { error: "Aucun document disponible pour initialiser le workflow de signature" },
+        { status: 400 }
+      );
+    }
+
+    const sessionDocumentsToInsert = workflowDocuments.map((doc, index) => ({
+      session_id: session.id,
+      document_order: index,
+      label: doc.label,
+      source: doc.source,
+      source_url: doc.source_url,
+      status: "pending_signers",
+      started_at: index === 0 ? new Date().toISOString() : null,
+    }));
+
+    const { data: insertedDocuments, error: documentsError } = await supabase
+      .from("session_documents")
+      .insert(sessionDocumentsToInsert)
+      .select("id, document_order")
+      .order("document_order", { ascending: true });
+
+    if (documentsError || !insertedDocuments?.length) {
+      await supabase.from("session_signers").delete().eq("session_id", session.id);
+      await supabase.from("notarization_sessions").delete().eq("id", session.id);
+      return NextResponse.json(
+        { error: "Erreur création documents session", details: documentsError?.message || "Aucun document créé" },
+        { status: 500 }
+      );
+    }
+
+    const signerSignatureRows = insertedDocuments.flatMap((doc) =>
+      insertedSigners.map((signer) => ({
+        session_document_id: doc.id,
+        session_signer_id: signer.id,
+        role: "signer",
+        signature_order: signer.order ?? 0,
+        status: "pending",
+      }))
+    );
+
+    const notarySignatureRows = notary_id
+      ? insertedDocuments.map((doc) => ({
+          session_document_id: doc.id,
+          notary_id,
+          role: "notary",
+          signature_order: 999,
+          status: "pending",
+        }))
+      : [];
+
+    const signatureRows = [...signerSignatureRows, ...notarySignatureRows];
+    const { error: signaturesError } = await supabase
+      .from("session_document_signatures")
+      .insert(signatureRows);
+
+    if (signaturesError) {
+      await supabase.from("session_documents").delete().eq("session_id", session.id);
+      await supabase.from("session_signers").delete().eq("session_id", session.id);
+      await supabase.from("notarization_sessions").delete().eq("id", session.id);
+      return NextResponse.json(
+        { error: "Erreur création file de signatures", details: signaturesError.message },
+        { status: 500 }
+      );
+    }
+
+    const firstDocumentId = insertedDocuments[0].id;
+    await supabase
+      .from("notarization_sessions")
+      .update({
+        current_document_id: firstDocumentId,
+        signing_flow_status: "pending_signers",
+      })
+      .eq("id", session.id);
+
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
     const signerLinks = await Promise.all(
       insertedSigners.map(async (signer) => {
@@ -151,6 +305,7 @@ export async function POST(request: NextRequest) {
       session_id: session.id,
       order_id: resolvedOrderId,
       status: session.status,
+      documents_count: insertedDocuments.length,
       signer_links: signerLinks,
       notary_link: notaryLink,
     });

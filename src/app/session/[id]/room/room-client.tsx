@@ -106,6 +106,23 @@ interface DocumentItem {
   source?: "session" | "veriff" | "submission";
 }
 
+interface SigningStateResponse {
+  sessionStatus?: string;
+  signingFlowStatus?: string;
+  currentDocument?: {
+    id: string;
+    label: string;
+    document_order: number;
+    status: string;
+  } | null;
+  expectedActor?: {
+    role: "signer" | "notary";
+    sessionSignerId?: string | null;
+    signerName?: string | null;
+    notaryId?: string | null;
+  } | null;
+}
+
 export function RoomClient({
   sessionId,
   signerId,
@@ -148,6 +165,8 @@ export function RoomClient({
   const [yousignEmbedUrl, setYousignEmbedUrl] = useState<string | null>(null);
   const [yousignLoading, setYousignLoading] = useState(false);
   const [yousignError, setYousignError] = useState<string | null>(null);
+  const [workflowLabel, setWorkflowLabel] = useState<string | null>(null);
+  const [expectedActorText, setExpectedActorText] = useState<string | null>(null);
 
   const updateParticipants = useCallback((call: DailyCall) => {
     const participants = call.participants();
@@ -211,6 +230,51 @@ export function RoomClient({
       router.push(`/session/${sessionId}/completed?token=${token}`);
     }
   }, [currentStatus, sessionId, token, router]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const syncSigningState = async () => {
+      try {
+        const res = await fetch(
+          `/api/session/${sessionId}/signing-state?token=${encodeURIComponent(token)}`,
+          { cache: "no-store" }
+        );
+        if (!res.ok) return;
+        const payload = (await res.json()) as SigningStateResponse;
+        if (cancelled) return;
+        if (payload.sessionStatus) setCurrentStatus(payload.sessionStatus);
+        setWorkflowLabel(
+          payload.currentDocument
+            ? `Document ${payload.currentDocument.document_order + 1}: ${payload.currentDocument.label}`
+            : null
+        );
+        if (payload.expectedActor?.role === "signer") {
+          if (payload.expectedActor.sessionSignerId === signerId) {
+            setExpectedActorText("C'est votre tour de signer.");
+          } else {
+            setExpectedActorText(
+              payload.expectedActor.signerName
+                ? `En attente de la signature de ${payload.expectedActor.signerName}.`
+                : "En attente de la signature d'un autre signataire."
+            );
+          }
+        } else if (payload.expectedActor?.role === "notary") {
+          setExpectedActorText("En attente de la signature et du tampon du notaire.");
+        } else {
+          setExpectedActorText(null);
+        }
+      } catch {
+        // Ignore transient polling errors
+      }
+    };
+
+    syncSigningState();
+    const interval = setInterval(syncSigningState, 4000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [sessionId, signerId, token]);
 
   useEffect(() => {
     if (!dailyRoomUrl) return;
@@ -326,7 +390,21 @@ export function RoomClient({
             error?: string;
             signed?: boolean;
             message?: string;
+            waiting?: boolean;
+            code?: string;
+            completed?: boolean;
+            documentLabel?: string;
+            documentOrder?: number;
           };
+
+          if (res.ok && payload.completed) {
+            if (!cancelled) {
+              setYousignEmbedUrl(null);
+              setYousignError(payload.message || "Session de signature terminée.");
+              setYousignLoading(false);
+            }
+            return;
+          }
 
           if (res.ok && payload.signed) {
             if (!cancelled) {
@@ -342,11 +420,26 @@ export function RoomClient({
               setYousignEmbedUrl(payload.embedUrl);
               setYousignError(null);
               setYousignLoading(false);
+              if (payload.documentLabel && typeof payload.documentOrder === "number") {
+                setWorkflowLabel(`Document ${payload.documentOrder + 1}: ${payload.documentLabel}`);
+              }
             }
             return;
           }
 
-          lastError = payload.error || "Lien Yousign indisponible";
+          if (payload.waiting) {
+            lastError = payload.message || "En attente de l'étape de signature suivante.";
+            if (payload.code === "waiting_for_notary" || payload.code === "waiting_for_others") {
+              if (!cancelled) {
+                setYousignEmbedUrl(null);
+                setYousignError(lastError);
+                setYousignLoading(false);
+              }
+              return;
+            }
+          } else {
+            lastError = payload.error || "Lien Yousign indisponible";
+          }
         } catch {
           lastError = "Erreur de chargement Yousign";
         }
@@ -379,6 +472,7 @@ export function RoomClient({
           className="h-[15px] w-auto"
         />
         <span className="text-[11px] text-muted-foreground">Session: {sessionId}</span>
+        {workflowLabel && <span className="text-[11px] text-muted-foreground">• {workflowLabel}</span>}
       </div>
       <div className="grid flex-1 min-h-0 grid-cols-1 gap-4 lg:grid-cols-[1fr_1fr_320px]">
         <Card className="min-h-0 flex flex-col">
@@ -431,7 +525,7 @@ export function RoomClient({
                 />
               ) : (
                 <div className="w-full h-full min-h-[420px] flex items-center justify-center p-4 text-sm text-muted-foreground text-center">
-                  {yousignError || "Lien Yousign indisponible."}
+                  {yousignError || expectedActorText || "Lien Yousign indisponible."}
                 </div>
               )}
             </div>
