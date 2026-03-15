@@ -320,7 +320,7 @@ export function RoomClient({
 
       try {
         const res = await fetch(
-          `/api/session/${sessionId}/yousign-embed?signerId=${encodeURIComponent(signerId)}`,
+          `/api/session/${sessionId}/yousign-embed?signerId=${encodeURIComponent(signerId)}&token=${encodeURIComponent(token)}`,
           { cache: "no-store" }
         );
         const payload = (await res.json()) as { embedUrl?: string; error?: string };
