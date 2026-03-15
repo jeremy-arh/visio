@@ -75,6 +75,7 @@ async function initYousign(params: {
   signers: { id: string; name: string; email: string }[];
 }): Promise<{ signatureRequestId: string; signerMap: Record<string, string> }> {
   const { supabase, sessionId, orderId, documentUrl, signers } = params;
+  const customExperienceId = process.env.YOUSIGN_CUSTOM_EXPERIENCE_ID?.trim();
 
   const signatureRequest = await yousignJson<YousignSignatureRequest>("/signature_requests", {
     method: "POST",
@@ -84,6 +85,7 @@ async function initYousign(params: {
       delivery_mode: "none",
       ordered_signers: false,
       timezone: "Europe/Paris",
+      ...(customExperienceId ? { custom_experience_id: customExperienceId } : {}),
     }),
   });
 

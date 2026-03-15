@@ -411,6 +411,8 @@ export function RoomClient({
                 <iframe
                   src={yousignEmbedUrl}
                   title="Yousign Signature"
+                  sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                  referrerPolicy="strict-origin-when-cross-origin"
                   className="w-full h-full min-h-[420px]"
                 />
               ) : (
