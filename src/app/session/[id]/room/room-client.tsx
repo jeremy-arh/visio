@@ -146,6 +146,9 @@ export function RoomClient({
   const [callItems, setCallItems] = useState<CallItem[]>([]);
   const [waitingMessage, setWaitingMessage] = useState<string | null>(null);
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
+  const [yousignEmbedUrl, setYousignEmbedUrl] = useState<string | null>(null);
+  const [yousignLoading, setYousignLoading] = useState(false);
+  const [yousignError, setYousignError] = useState<string | null>(null);
 
   const updateParticipants = useCallback((call: DailyCall) => {
     const participants = call.participants();
@@ -302,6 +305,42 @@ export function RoomClient({
     }
   }, [availableDocuments, selectedDocumentId]);
 
+  useEffect(() => {
+    const loadYousignEmbed = async () => {
+      if (!signerId) {
+        setYousignEmbedUrl(null);
+        setYousignError("Aucun signataire disponible.");
+        setYousignLoading(false);
+        return;
+      }
+
+      setYousignLoading(true);
+      setYousignError(null);
+      setYousignEmbedUrl(null);
+
+      try {
+        const res = await fetch(
+          `/api/session/${sessionId}/yousign-embed?signerId=${encodeURIComponent(signerId)}`,
+          { cache: "no-store" }
+        );
+        const payload = (await res.json()) as { embedUrl?: string; error?: string };
+
+        if (!res.ok || !payload.embedUrl) {
+          setYousignError(payload.error || "Lien Yousign indisponible");
+          return;
+        }
+
+        setYousignEmbedUrl(payload.embedUrl);
+      } catch {
+        setYousignError("Erreur de chargement Yousign");
+      } finally {
+        setYousignLoading(false);
+      }
+    };
+
+    loadYousignEmbed();
+  }, [sessionId, signerId]);
+
   return (
     <div className="relative h-[calc(100vh-2rem)] bg-muted/20 p-2 flex flex-col">
       <div className="mb-2 flex items-center gap-2 flex-shrink-0">
@@ -348,30 +387,26 @@ export function RoomClient({
 
         <Card className="min-h-0 flex flex-col">
           <CardContent className="flex-1 min-h-0 p-2 flex flex-col gap-2">
-            {availableDocuments.length > 1 && (
-              <div className="flex flex-wrap gap-2">
-                {availableDocuments.map((doc) => (
-                  <Button
-                    key={doc.id}
-                    size="sm"
-                    variant={selectedDocument?.id === doc.id ? "default" : "secondary"}
-                    onClick={() => setSelectedDocumentId(doc.id)}
-                  >
-                    {doc.label}
-                  </Button>
-                ))}
-              </div>
-            )}
             <div className="flex-1 min-h-0 rounded-md border bg-muted/20 overflow-hidden">
-              {selectedDocument ? (
+              {yousignLoading ? (
+                <div className="w-full h-full min-h-[420px] flex items-center justify-center text-sm text-muted-foreground">
+                  Chargement de la signature Yousign...
+                </div>
+              ) : yousignEmbedUrl ? (
+                <iframe
+                  src={yousignEmbedUrl}
+                  title="Yousign Signature"
+                  className="w-full h-full min-h-[420px]"
+                />
+              ) : selectedDocument ? (
                 <iframe
                   src={selectedDocument.url}
                   title={selectedDocument.label}
                   className="w-full h-full min-h-[420px]"
                 />
               ) : (
-                <div className="w-full h-full grid place-items-center text-sm text-muted-foreground">
-                  Aucun document disponible
+                <div className="w-full h-full min-h-[420px] flex items-center justify-center p-4 text-sm text-muted-foreground text-center">
+                  {yousignError || "Lien Yousign indisponible."}
                 </div>
               )}
             </div>
