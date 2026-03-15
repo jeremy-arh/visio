@@ -11,6 +11,20 @@ const sanitizeYousignBase = (raw?: string) => {
 };
 
 const YOUSIGN_BASE = sanitizeYousignBase(process.env.YOUSIGN_API_URL);
+const IS_YOUSIGN_SANDBOX = YOUSIGN_BASE.includes("api-sandbox.yousign.app");
+
+const buildEmbedUrl = (signatureLink: string) => {
+  try {
+    const url = new URL(signatureLink);
+    // In sandbox, bypass iframe domain checks for local/dev and custom domains.
+    if (IS_YOUSIGN_SANDBOX) {
+      url.searchParams.set("disable_domain_validation", "true");
+    }
+    return url.toString();
+  } catch {
+    return signatureLink;
+  }
+};
 
 async function yousignFetch(path: string, options: RequestInit = {}): Promise<Response> {
   const apiKey = process.env.YOUSIGN_API_KEY;
@@ -271,7 +285,7 @@ export async function GET(
       );
     }
 
-    return NextResponse.json({ embedUrl: signerData.signature_link });
+    return NextResponse.json({ embedUrl: buildEmbedUrl(signerData.signature_link) });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     console.error("[Yousign] embed route error:", msg);
