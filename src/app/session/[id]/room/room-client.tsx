@@ -145,7 +145,6 @@ export function RoomClient({
   const [isInCall, setIsInCall] = useState(false);
   const [callItems, setCallItems] = useState<CallItem[]>([]);
   const [waitingMessage, setWaitingMessage] = useState<string | null>(null);
-  const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
   const [yousignEmbedUrl, setYousignEmbedUrl] = useState<string | null>(null);
   const [yousignLoading, setYousignLoading] = useState(false);
   const [yousignError, setYousignError] = useState<string | null>(null);
@@ -295,17 +294,14 @@ export function RoomClient({
     }
   };
 
-  const availableDocuments = documents.filter((d) => d.status === "available" && !!d.url);
-  const selectedDocument =
-    availableDocuments.find((d) => d.id === selectedDocumentId) ?? availableDocuments[0] ?? null;
-
   useEffect(() => {
-    if (!selectedDocumentId && availableDocuments.length) {
-      setSelectedDocumentId(availableDocuments[0].id);
-    }
-  }, [availableDocuments, selectedDocumentId]);
+    let cancelled = false;
 
-  useEffect(() => {
+    const wait = (ms: number) =>
+      new Promise<void>((resolve) => {
+        setTimeout(resolve, ms);
+      });
+
     const loadYousignEmbed = async () => {
       if (!signerId) {
         setYousignEmbedUrl(null);
@@ -318,28 +314,45 @@ export function RoomClient({
       setYousignError(null);
       setYousignEmbedUrl(null);
 
-      try {
-        const res = await fetch(
-          `/api/session/${sessionId}/yousign-embed?signerId=${encodeURIComponent(signerId)}&token=${encodeURIComponent(token)}`,
-          { cache: "no-store" }
-        );
-        const payload = (await res.json()) as { embedUrl?: string; error?: string };
+      let lastError = "Lien Yousign indisponible";
+      for (let attempt = 0; attempt < 10; attempt += 1) {
+        try {
+          const res = await fetch(
+            `/api/session/${sessionId}/yousign-embed?signerId=${encodeURIComponent(signerId)}&token=${encodeURIComponent(token)}`,
+            { cache: "no-store" }
+          );
+          const payload = (await res.json()) as { embedUrl?: string; error?: string };
 
-        if (!res.ok || !payload.embedUrl) {
-          setYousignError(payload.error || "Lien Yousign indisponible");
-          return;
+          if (res.ok && payload.embedUrl) {
+            if (!cancelled) {
+              setYousignEmbedUrl(payload.embedUrl);
+              setYousignError(null);
+            }
+            return;
+          }
+
+          lastError = payload.error || "Lien Yousign indisponible";
+        } catch {
+          lastError = "Erreur de chargement Yousign";
         }
 
-        setYousignEmbedUrl(payload.embedUrl);
-      } catch {
-        setYousignError("Erreur de chargement Yousign");
-      } finally {
-        setYousignLoading(false);
+        if (attempt < 9) {
+          await wait(1500);
+          if (cancelled) return;
+        }
+      }
+
+      if (!cancelled) {
+        setYousignError(lastError);
       }
     };
 
     loadYousignEmbed();
-  }, [sessionId, signerId]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId, signerId, token]);
 
   return (
     <div className="relative h-[calc(100vh-2rem)] bg-muted/20 p-2 flex flex-col">
@@ -396,12 +409,6 @@ export function RoomClient({
                 <iframe
                   src={yousignEmbedUrl}
                   title="Yousign Signature"
-                  className="w-full h-full min-h-[420px]"
-                />
-              ) : selectedDocument ? (
-                <iframe
-                  src={selectedDocument.url}
-                  title={selectedDocument.label}
                   className="w-full h-full min-h-[420px]"
                 />
               ) : (
