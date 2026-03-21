@@ -4,6 +4,14 @@ import { normalizePdfToA4, normalizeImageToA4Pdf, isPdfBytes, isImageBytes } fro
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 
+/** Ensures a BodyInit-compatible buffer for NextResponse (strict TS DOM / ArrayBufferLike). */
+function toResponseBody(data: ArrayBuffer | Uint8Array): ArrayBuffer {
+  if (data instanceof ArrayBuffer) return data;
+  const copy = new Uint8Array(data.byteLength);
+  copy.set(data);
+  return copy.buffer;
+}
+
 function isAllowedStorageUrl(url: string): boolean {
   try {
     const u = new URL(url);
@@ -100,7 +108,7 @@ export async function GET(
       console.warn("[document-proxy] normalization failed, serving raw:", err);
     }
 
-    return new NextResponse(responseBody, {
+    return new NextResponse(toResponseBody(responseBody), {
       headers: {
         "Content-Type": responseContentType,
         "Content-Disposition": "inline",
