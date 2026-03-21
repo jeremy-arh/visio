@@ -5,6 +5,9 @@ node_modules/
 .env.local
 .env.*.local
 
+# Notary dashboard app lives in https://github.com/jeremy-arh/notary (clone alongside this repo).
+notary-dashboard/
+
 /supabase/*
 !/supabase/migrations/
 /supabase/migrations/*
