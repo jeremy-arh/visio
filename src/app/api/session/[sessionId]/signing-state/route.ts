@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { verifyToken } from "@/lib/jwt";
-import { advanceSigningWorkflow, getExpectedSignature, loadSigningContext } from "@/lib/signing-workflow";
+import { advanceSigningWorkflow, getExpectedSignature } from "@/lib/signing-workflow";
+import { trySyncNotarySignatureFromYousign } from "@/lib/yousign-notary-sync";
 
 export async function GET(
   request: NextRequest,
@@ -15,27 +16,60 @@ export async function GET(
     }
 
     const payload = await verifyToken(token);
-    if (!payload || payload.sessionId !== sessionId) {
+    if (!payload) {
+      return NextResponse.json({ error: "token invalide" }, { status: 403 });
+    }
+    if (payload.sessionId && payload.sessionId !== sessionId) {
+      return NextResponse.json({ error: "token invalide" }, { status: 403 });
+    }
+    if (!payload.sessionId && payload.role !== "notary") {
       return NextResponse.json({ error: "token invalide" }, { status: 403 });
     }
 
     const supabase = createServiceClient();
-    const context = await advanceSigningWorkflow(supabase, sessionId);
+    if (!payload.sessionId && payload.role === "notary" && payload.notaryId) {
+      const { data: owner } = await supabase
+        .from("notarization_sessions")
+        .select("notary_id")
+        .eq("id", sessionId)
+        .single();
+      if (!owner || owner.notary_id !== payload.notaryId) {
+        return NextResponse.json({ error: "token invalide" }, { status: 403 });
+      }
+    }
+    let context = await advanceSigningWorkflow(supabase, sessionId);
     if (!context) {
       return NextResponse.json({ error: "Session introuvable" }, { status: 404 });
     }
 
-    const expected = getExpectedSignature(context.signatures);
+    // Rattrapage : YouSign peut être à "signed" alors que la DB est encore "notary" (poll notaire manqué).
+    let expected = getExpectedSignature(context.signatures);
+    if (expected?.role === "notary") {
+      try {
+        const synced = await trySyncNotarySignatureFromYousign(supabase, context);
+        if (synced) {
+          context = (await advanceSigningWorkflow(supabase, sessionId)) ?? context;
+          expected = getExpectedSignature(context.signatures);
+        }
+      } catch (syncErr) {
+        console.warn("[signing-state] notary yousign sync skipped:", syncErr);
+      }
+    }
+
+    if (context.session.signing_flow_status === "idle") {
+      expected = null;
+    }
     const signerById = new Map(context.signers.map((s) => [s.id, s]));
     const expectedSigner = expected?.session_signer_id
       ? signerById.get(expected.session_signer_id) || null
       : null;
 
-    return NextResponse.json({
-      sessionId,
-      sessionStatus: context.session.status,
-      signingFlowStatus: context.session.signing_flow_status,
-      currentDocument: context.currentDocument,
+    return NextResponse.json(
+      {
+        sessionId,
+        sessionStatus: context.session.status,
+        signingFlowStatus: context.session.signing_flow_status,
+        currentDocument: context.currentDocument,
       documents: context.documents,
       expectedActor: expected
         ? {
@@ -51,7 +85,14 @@ export async function GET(
           ? (signerById.get(sig.session_signer_id)?.name ?? null)
           : null,
       })),
-    });
+    },
+    {
+      headers: {
+        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+        Pragma: "no-cache",
+      },
+    }
+    );
   } catch (error) {
     const details = error instanceof Error ? error.message : String(error);
     console.error("[signing-state] error", details);

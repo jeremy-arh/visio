@@ -1,14 +1,10 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { ToastProvider } from "@/components/ui/toast-provider";
 import "./globals.css";
 
-const inter = Inter({
-  subsets: ["latin"],
-});
-
 export const metadata: Metadata = {
-  title: "My Notary - Notarisation en ligne",
-  description: "Outil de notarisation à distance",
+  title: "My Notary",
+  description: "Remote notarization tool",
 };
 
 export default function RootLayout({
@@ -17,12 +13,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="fr" suppressHydrationWarning>
+    <html lang="en" className="font-sans" suppressHydrationWarning>
       <body
-        className={`${inter.className} antialiased min-h-screen bg-background text-foreground`}
+        className="antialiased min-h-screen bg-[#F9FAFB] text-foreground"
         suppressHydrationWarning
       >
-        {children}
+        <ToastProvider>{children}</ToastProvider>
       </body>
     </html>
   );

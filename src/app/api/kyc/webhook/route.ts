@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { logAuditEvent } from "@/lib/audit";
 import crypto from "crypto";
 
 export async function POST(request: NextRequest) {
@@ -87,6 +88,30 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Signer update failed" }, { status: 500 });
     }
 
+    // Récupérer les infos du signer pour l'audit
+    const { data: signerInfo } = await supabase
+      .from("session_signers")
+      .select("name, email")
+      .eq("id", signer.id)
+      .single();
+
+    const kycEventType = approved ? "kyc_approved" : (normalizedStatus === "resubmission_requested" ? "kyc_resubmission_requested" : "kyc_declined");
+    await logAuditEvent(supabase, {
+      sessionId: signer.session_id,
+      eventType: kycEventType,
+      actorType: "signer",
+      actorId: signer.id,
+      actorName: signerInfo?.name ?? null,
+      actorEmail: signerInfo?.email ?? null,
+      sessionSignerId: signer.id,
+      metadata: {
+        veriff_session_id: verificationId ?? null,
+        veriff_status: status ?? null,
+        veriff_code: code ?? null,
+        approved,
+      },
+    });
+
     if (approved) {
       const { data: signers } = await supabase
         .from("session_signers")
@@ -99,6 +124,13 @@ export async function POST(request: NextRequest) {
           .from("notarization_sessions")
           .update({ status: "waiting_notary", updated_at: new Date().toISOString() })
           .eq("id", signer.session_id);
+
+        await logAuditEvent(supabase, {
+          sessionId: signer.session_id,
+          eventType: "session_started",
+          actorType: "system",
+          metadata: { reason: "all_kyc_approved" },
+        });
       }
     }
 

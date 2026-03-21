@@ -5,7 +5,6 @@ node_modules/
 .env.local
 .env.*.local
 
-notary-dashboard/
 /supabase/*
 !/supabase/migrations/
 /supabase/migrations/*
@@ -18,4 +17,6 @@ pnpm-debug.log*
 
 dist/
 coverage/
+.recordings/
+
 *.tsbuildinfo

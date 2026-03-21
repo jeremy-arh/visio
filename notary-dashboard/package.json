@@ -1,0 +1,40 @@
+{
+  "name": "notary-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3010",
+    "build": "next build",
+    "start": "next start -p 3010",
+    "record:session": "tsx scripts/record-session.ts",
+    "generate:recording-token": "tsx scripts/generate-recording-token.ts"
+  },
+  "dependencies": {
+    "@daily-co/daily-js": "^0.67.0",
+    "@radix-ui/react-slot": "*",
+    "@supabase/ssr": "^0.5.0",
+    "@supabase/supabase-js": "^2.45.0",
+    "class-variance-authority": "*",
+    "clsx": "*",
+    "jose": "^5.9.6",
+    "lucide-react": "^0.460.0",
+    "next": "14.2.18",
+    "pdfjs-dist": "^4.9.155",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tailwind-merge": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "autoprefixer": "^10.4.27",
+    "dotenv": "^16.4.5",
+    "playwright": "^1.49.0",
+    "postcss": "^8.5.8",
+    "tailwindcss": "^3.4.1",
+    "tailwindcss-animate": "^1.0.7",
+    "tsx": "^4.19.0",
+    "typescript": "^5"
+  }
+}

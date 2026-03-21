@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { logAuditEvent, extractRequestMeta } from "@/lib/audit";
 
 const VERIFF_API_URL = process.env.VERIFF_API_URL || "https://stationapi.veriff.com";
 
@@ -82,6 +83,20 @@ export async function POST(request: NextRequest) {
       .update({ veriff_session_id: veriffSessionId })
       .eq("id", signerId)
       .eq("session_id", sessionId);
+
+    const { ipAddress, userAgent } = extractRequestMeta(request.headers);
+    await logAuditEvent(supabase, {
+      sessionId,
+      eventType: "kyc_started",
+      actorType: "signer",
+      actorId: signerId,
+      actorName: signer.name ?? null,
+      actorEmail: signer.email ?? null,
+      sessionSignerId: signerId,
+      metadata: { veriff_session_id: veriffSessionId },
+      ipAddress,
+      userAgent,
+    });
 
     return NextResponse.json({ url: veriffUrl });
   } catch (err) {

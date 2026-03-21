@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { signToken } from "@/lib/jwt";
+import { logAuditEvent } from "@/lib/audit";
 import crypto from "crypto";
 
 type SessionDocumentSeed = {
@@ -47,21 +48,43 @@ export async function POST(request: NextRequest) {
         .eq("submission_id", submission_id)
         .order("created_at", { ascending: true });
       if (signatories?.length) {
+        // Dédupliquer par email pour éviter les doublons liés aux document_key multiples
+        const seen = new Set<string>();
         resolvedSigners = signatories
           .map((s) => ({
             name: [s.first_name, s.last_name].filter(Boolean).join(" ") || "Signataire",
             email: s.email || "",
           }))
-          .filter((s) => s.email);
+          .filter((s) => {
+            if (!s.email || seen.has(s.email)) return false;
+            seen.add(s.email);
+            return true;
+          });
       }
-      // 2. Si aucun signataire, utiliser le client de la submission (signataire unique)
+
+      // 2. Si table signatories vide, lire submission.data.signatories
       if (!resolvedSigners.length) {
         const { data: submission } = await supabase
           .from("submission")
-          .select("first_name, last_name, email")
+          .select("first_name, last_name, email, data")
           .eq("id", submission_id)
           .single();
-        if (submission?.email) {
+
+        const dataSignatories: { firstName?: string; lastName?: string; email?: string }[] =
+          Array.isArray(submission?.data?.signatories) ? submission.data.signatories : [];
+
+        if (dataSignatories.length > 0) {
+          // Pas de déduplication ici : chaque entrée est un signataire distinct voulu par l'utilisateur
+          resolvedSigners = dataSignatories
+            .map((s) => ({
+              name: [s.firstName, s.lastName].filter(Boolean).join(" ") || "Signataire",
+              email: s.email || "",
+            }))
+            .filter((s) => s.email);
+        }
+
+        // 3. Dernier recours : utiliser uniquement le client de la submission
+        if (!resolvedSigners.length && submission?.email) {
           resolvedSigners = [
             {
               name: [submission.first_name, submission.last_name].filter(Boolean).join(" ") || "Signataire",
@@ -274,7 +297,7 @@ export async function POST(request: NextRequest) {
       .from("notarization_sessions")
       .update({
         current_document_id: firstDocumentId,
-        signing_flow_status: "pending_signers",
+        signing_flow_status: "idle",
       })
       .eq("id", session.id);
 
@@ -300,6 +323,19 @@ export async function POST(request: NextRequest) {
       const notaryDashboardUrl = process.env.NOTARY_DASHBOARD_URL || baseUrl;
       notaryLink = `${notaryDashboardUrl}/login`;
     }
+
+    await logAuditEvent(supabase, {
+      sessionId: session.id,
+      eventType: "session_created",
+      actorType: "system",
+      metadata: {
+        order_id: resolvedOrderId,
+        signers_count: insertedSigners.length,
+        documents_count: insertedDocuments.length,
+        notary_id: notary_id || null,
+      },
+      ipAddress: request.headers.get("x-forwarded-for") ?? request.headers.get("x-real-ip") ?? null,
+    });
 
     return NextResponse.json({
       session_id: session.id,

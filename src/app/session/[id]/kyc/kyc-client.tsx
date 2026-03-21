@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { FilePenLine, Mail, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
@@ -36,7 +37,7 @@ export function KycClient({
         router.push(`/session/${sessionId}/waiting?token=${token}`);
       } else {
         const data = await res.json();
-        console.error(data.error || "Erreur");
+        console.error(data.error || "Error");
       }
     } catch (e) {
       console.error(e);
@@ -59,10 +60,10 @@ export function KycClient({
       if (res.ok && data.url) {
         window.location.href = data.url;
       } else {
-        setVeriffError(data.error || "Impossible de créer la session Veriff");
+        setVeriffError(data.error || "Could not create Veriff session");
       }
     } catch (e) {
-      setVeriffError("Erreur lors du chargement de Veriff");
+      setVeriffError("Error loading Veriff");
       console.error(e);
     } finally {
       setLoading(false);
@@ -70,23 +71,40 @@ export function KycClient({
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <h2 className="text-lg font-semibold">Vérification d&apos;identité</h2>
-        <p className="text-sm text-muted-foreground">
+    <Card className="min-w-0 w-full overflow-hidden shadow-sm">
+      <CardHeader className="space-y-2 px-4 pb-2 pt-4 sm:space-y-1 sm:px-6 sm:pt-6">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <FilePenLine
+            className="h-5 w-5 shrink-0 text-[#2563eb]"
+            aria-hidden
+            strokeWidth={1.75}
+          />
+          <h2 className="min-w-0 text-base font-semibold sm:text-lg">Next step</h2>
+        </div>
+        <p className="text-sm text-muted-foreground sm:pl-7">
           {veriffEnabled
-            ? "Lancez la vérification Veriff ci-dessous pour confirmer votre identité."
-            : "Confirmez votre identité pour poursuivre la session de notarisation."}
+            ? "Start Veriff verification below to confirm your identity."
+            : "Confirm your identity to continue the notarization session."}
         </p>
       </CardHeader>
-      <CardContent>
-        <div className="space-y-2 text-sm text-muted-foreground mb-4">
-          <p>Signataire : {signerName} ({signerEmail})</p>
+      <CardContent className="space-y-5 px-4 pt-2 sm:px-6">
+        <div className="rounded-lg border border-neutral-100 bg-neutral-50/80 px-3 py-3 text-sm sm:px-4">
+          <div className="flex min-w-0 items-start gap-2 text-muted-foreground">
+            <User className="mt-0.5 h-4 w-4 shrink-0" aria-hidden strokeWidth={1.75} />
+            <span className="min-w-0 break-words">
+              <span className="text-foreground/80">Signer</span>{" "}
+              <span className="font-medium text-foreground">{signerName}</span>
+            </span>
+          </div>
+          <div className="mt-2 flex min-w-0 items-start gap-2 text-muted-foreground">
+            <Mail className="mt-0.5 h-4 w-4 shrink-0" aria-hidden strokeWidth={1.75} />
+            <span className="min-w-0 break-all sm:break-words">{signerEmail}</span>
+          </div>
         </div>
         {veriffEnabled ? (
           <div className="space-y-4">
             <Button onClick={handleStartVeriff} disabled={loading}>
-              {loading ? "Chargement..." : "Lancer la vérification Veriff"}
+              {loading ? "Loading…" : "Start Veriff verification"}
             </Button>
             {veriffError && (
               <p className="text-sm text-destructive">{veriffError}</p>
@@ -94,7 +112,7 @@ export function KycClient({
           </div>
         ) : (
           <Button onClick={handleVerifyIdentity} disabled={loading}>
-            {loading ? "Vérification..." : "Confirmer mon identité"}
+            {loading ? "Verifying…" : "Confirm my identity"}
           </Button>
         )}
       </CardContent>

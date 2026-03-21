@@ -1,7 +1,14 @@
+import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { createServiceClient } from "@/lib/supabase/service";
 import { redirect } from "next/navigation";
+import { SessionPreRoomLogo } from "@/components/session-pre-room-logo";
 import { KycClient } from "./kyc-client";
+import { KycHero } from "./kyc-hero";
+
+export const metadata: Metadata = {
+  title: { absolute: "Identity verification" },
+};
 
 export default async function KycPage({
   params,
@@ -37,21 +44,23 @@ export default async function KycPage({
     redirect(`/session/${id}/waiting?token=${token}`);
   }
 
+  const firstName =
+    signer.name.trim().split(/\s+/)[0] || signer.name;
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-8">
-      <div className="w-full max-w-2xl">
-        <h1 className="text-2xl font-bold mb-2">Vérification d&apos;identité</h1>
-        <p className="text-muted-foreground mb-6">
-          Bonjour {signer.name}, veuillez compléter la vérification de votre
-          identité pour continuer.
-        </p>
-        <KycClient
-          sessionId={id}
-          signerId={signerId}
-          signerName={signer.name}
-          signerEmail={signer.email}
-          veriffEnabled={process.env.NEXT_PUBLIC_VERIFF_ENABLED === "true"}
-        />
+    <main className="relative flex min-h-screen flex-col px-4 pb-6 pt-4 sm:px-8 sm:pb-8 sm:pt-6">
+      <SessionPreRoomLogo />
+      <div className="flex w-full min-h-0 flex-1 flex-col items-center justify-center py-2 sm:py-4">
+        <div className="w-full min-w-0 max-w-2xl">
+          <KycHero firstName={firstName} />
+          <KycClient
+            sessionId={id}
+            signerId={signerId}
+            signerName={signer.name}
+            signerEmail={signer.email}
+            veriffEnabled={process.env.NEXT_PUBLIC_VERIFF_ENABLED === "true"}
+          />
+        </div>
       </div>
     </main>
   );

@@ -1,9 +1,15 @@
+import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { createServiceClient } from "@/lib/supabase/service";
 import { redirect } from "next/navigation";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { SessionPreRoomLogo } from "@/components/session-pre-room-logo";
+import { CompletedHero } from "./completed-hero";
+import { CompletedActions } from "./completed-actions";
+import { CompletedFeedback } from "./completed-feedback";
+
+export const metadata: Metadata = {
+  title: { absolute: "Session completed" },
+};
 
 export default async function CompletedPage({
   params,
@@ -25,31 +31,30 @@ export default async function CompletedPage({
 
   if (!session) redirect("/");
 
+  const { data: signerRow } = await supabase
+    .from("session_signers")
+    .select("session_rating, session_rating_comment, session_rating_at")
+    .eq("id", signerId)
+    .eq("session_id", id)
+    .maybeSingle();
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-8">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <h1 className="text-2xl font-bold text-green-600">Session terminée</h1>
-          <p className="text-muted-foreground">
-            La notarisation a été complétée avec succès.
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {session.signed_document_url && (
-            <a
-              href={session.signed_document_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block text-primary hover:underline"
-            >
-              Télécharger le document signé
-            </a>
-          )}
-          <Link href="/">
-            <Button variant="outline">Retour à l&apos;accueil</Button>
-          </Link>
-        </CardContent>
-      </Card>
+    <main className="relative flex min-h-screen flex-col px-4 pb-6 pt-4 sm:px-8 sm:pb-8 sm:pt-6">
+      <SessionPreRoomLogo />
+      <div className="flex w-full min-h-0 flex-1 flex-col items-center justify-center py-2 sm:py-4">
+        <div className="w-full min-w-0 max-w-2xl">
+          <CompletedHero />
+          <div className="mb-6 space-y-6 sm:mb-8">
+            <CompletedFeedback
+              sessionId={id}
+              initialRating={signerRow?.session_rating ?? null}
+              initialComment={signerRow?.session_rating_comment ?? null}
+              submittedAt={signerRow?.session_rating_at ?? null}
+            />
+            <CompletedActions signedDocumentUrl={session.signed_document_url} />
+          </div>
+        </div>
+      </div>
     </main>
   );
 }

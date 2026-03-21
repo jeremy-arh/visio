@@ -29,6 +29,13 @@ export async function POST(
       return NextResponse.json({ error: "Session introuvable" }, { status: 404 });
     }
 
+    if (context.session.signing_flow_status === "idle") {
+      return NextResponse.json(
+        { error: "The notary has not started the signing flow yet.", code: "signing_flow_not_started" },
+        { status: 403 }
+      );
+    }
+
     const expected = getExpectedSignature(context.signatures);
     if (expected && status) {
       if (payload.role === "signer" && expected.role === "signer" && payload.signerId) {

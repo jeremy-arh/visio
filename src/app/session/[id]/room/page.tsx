@@ -1,7 +1,12 @@
+import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { createServiceClient } from "@/lib/supabase/service";
 import { redirect } from "next/navigation";
 import { RoomClient } from "./room-client";
+
+export const metadata: Metadata = {
+  title: { absolute: "Session" },
+};
 
 interface DocumentItem {
   id: string;
@@ -22,21 +27,21 @@ async function fetchInitialDocuments(session: {
   const documents: DocumentItem[] = [
     {
       id: "session-document",
-      label: "Document à notariser",
+      label: "Document to notarize",
       url: session.document_url || "",
       source: "session",
       status: session.document_url ? "available" : "pending",
     },
     {
       id: "session-stamped",
-      label: "Document tamponné",
+      label: "Stamped document",
       url: session.stamped_document_url || "",
       source: "session",
       status: session.stamped_document_url ? "available" : "pending",
     },
     {
       id: "session-signed",
-      label: "Document signé",
+      label: "Signed document",
       url: session.signed_document_url || "",
       source: "session",
       status: session.signed_document_url ? "available" : "pending",
@@ -77,7 +82,7 @@ async function fetchInitialDocuments(session: {
       if (file.file_url) documents.push({ id: `sf-${file.id}`, label: file.file_name || "Document", url: file.file_url, source: "submission", status: "available" });
     }
     for (const file of notarizedFilesRes.data || []) {
-      if (file.file_url) documents.push({ id: `nf-${file.id}`, label: file.file_name || "Document notarisé", url: file.file_url, source: "submission", status: "available" });
+      if (file.file_url) documents.push({ id: `nf-${file.id}`, label: file.file_name || "Notarized document", url: file.file_url, source: "submission", status: "available" });
     }
   }
 
@@ -122,9 +127,10 @@ export default async function RoomPage({
   const initialDocuments = await fetchInitialDocuments(session);
 
   return (
-    <main className="flex min-h-screen flex-col p-4">
+    <main className="flex min-h-screen flex-col p-4 bg-[#F9FAFB]">
         <RoomClient
           sessionId={id}
+          isNotary={role === "notary"}
           signerId={signerId || ""}
           status={session.status}
           dailyRoomUrl={session.daily_room_url}

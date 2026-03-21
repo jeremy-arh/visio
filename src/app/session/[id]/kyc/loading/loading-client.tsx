@@ -38,7 +38,7 @@ export function KycLoadingClient({
 
         if (!res.ok) {
           if (!cancelled && attemptsRef.current >= maxAttempts) {
-            setError("Impossible de vérifier votre statut pour le moment.");
+            setError("Unable to verify your status right now.");
           }
           return;
         }
@@ -60,11 +60,11 @@ export function KycLoadingClient({
         }
 
         if (attemptsRef.current >= maxAttempts) {
-          setError("Vérification toujours en cours. Veuillez réessayer.");
+          setError("Verification still pending. Please try again.");
         }
       } catch {
         if (!cancelled && attemptsRef.current >= maxAttempts) {
-          setError("Erreur réseau lors de la vérification.");
+          setError("Network error while verifying.");
         }
       }
     };
@@ -79,26 +79,26 @@ export function KycLoadingClient({
   }, [sessionId, signerId, token, router]);
 
   return (
-    <Card className="w-full max-w-md">
-      <CardHeader>
-        <h1 className="text-xl font-bold">Vérification en cours</h1>
+    <Card className="min-w-0 w-full max-w-md">
+      <CardHeader className="px-4 sm:px-6">
+        <h1 className="text-xl font-bold">Verification in progress</h1>
         <p className="text-sm text-muted-foreground">
-          Nous récupérons le résultat de votre vérification d&apos;identité.
+          We are retrieving your identity verification result.
         </p>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-4 sm:px-6">
         {!error ? (
-          <div className="flex items-center gap-2">
-            <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
-            <span className="text-sm text-muted-foreground">
-              Patientez, redirection automatique...
+          <div className="flex min-w-0 items-start gap-2">
+            <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amber-500 animate-pulse" />
+            <span className="min-w-0 text-sm leading-relaxed text-muted-foreground">
+              Please wait — you will be redirected automatically…
             </span>
           </div>
         ) : (
           <div className="space-y-3">
             <p className="text-sm text-destructive">{error}</p>
             <Button onClick={() => router.replace(retryUrl)}>
-              Recommencer la vérification
+              Retry verification
             </Button>
           </div>
         )}

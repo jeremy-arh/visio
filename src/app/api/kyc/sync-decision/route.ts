@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { logAuditEvent, extractRequestMeta } from "@/lib/audit";
 import crypto from "crypto";
 
 const VERIFF_API_URL = process.env.VERIFF_API_URL || "https://stationapi.veriff.com";
@@ -114,6 +115,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const { data: signerFull } = await supabase
+      .from("session_signers")
+      .select("name, email")
+      .eq("id", signer.id)
+      .single();
+
+    const { ipAddress, userAgent } = extractRequestMeta(request.headers);
+    await logAuditEvent(supabase, {
+      sessionId: signer.session_id,
+      eventType: approved ? "kyc_approved" : "kyc_declined",
+      actorType: "signer",
+      actorId: signer.id,
+      actorName: signerFull?.name ?? null,
+      actorEmail: signerFull?.email ?? null,
+      sessionSignerId: signer.id,
+      metadata: {
+        veriff_session_id: signer.veriff_session_id,
+        veriff_status: decision.status ?? null,
+        veriff_code: decision.code ?? null,
+        approved,
+        source: "sync_decision",
+      },
+      ipAddress,
+      userAgent,
+    });
+
     let sessionStatus: string | null = null;
     if (approved) {
       const { data: allSigners } = await supabase
@@ -128,6 +155,13 @@ export async function POST(request: NextRequest) {
           .update({ status: "waiting_notary", updated_at: new Date().toISOString() })
           .eq("id", signer.session_id);
         sessionStatus = "waiting_notary";
+
+        await logAuditEvent(supabase, {
+          sessionId: signer.session_id,
+          eventType: "session_started",
+          actorType: "system",
+          metadata: { reason: "all_kyc_approved" },
+        });
       }
     }
 

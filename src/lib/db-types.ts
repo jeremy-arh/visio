@@ -8,6 +8,12 @@ export type SessionStatus =
   | "completed";
 
 export type KycStatus = "pending" | "approved" | "declined";
+export type SessionSigningFlowStatus =
+  | "idle"
+  | "pending_signers"
+  | "pending_notary"
+  | "completed";
+
 export type DocumentWorkflowStatus =
   | "pending_signers"
   | "pending_notary"
@@ -42,7 +48,7 @@ export interface NotarizationSession {
   daily_room_url: string | null;
   yousign_signature_request_id: string | null;
   current_document_id: string | null;
-  signing_flow_status: Exclude<DocumentWorkflowStatus, "cancelled">;
+  signing_flow_status: SessionSigningFlowStatus;
   created_at: string;
   updated_at: string;
 }
