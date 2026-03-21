@@ -425,8 +425,7 @@ function PlacementPicker({
     (async () => {
       try {
         const pdfjsLib = await import("pdfjs-dist");
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (pdfjsLib as any).GlobalWorkerOptions.workerSrc =
+        pdfjsLib.GlobalWorkerOptions.workerSrc =
           `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
         const pdf = await pdfjsLib.getDocument({ url: documentUrl, isEvalSupported: false }).promise;
