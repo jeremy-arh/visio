@@ -68,9 +68,9 @@ export async function normalizeImageToA4Pdf(
 }
 
 /** Détection par magic bytes — %PDF */
-export function isPdfBytes(bytes: ArrayBuffer): boolean {
-  if (bytes.byteLength < 4) return false;
-  const view = new Uint8Array(bytes, 0, 4);
+export function isPdfBytes(bytes: ArrayBuffer | Uint8Array): boolean {
+  const view = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  if (view.byteLength < 4) return false;
   return view[0] === 0x25 && view[1] === 0x50 && view[2] === 0x44 && view[3] === 0x46;
 }
 

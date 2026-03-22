@@ -283,10 +283,10 @@ async function initYousign(params: {
     fileName = wrapped.pdfFileName;
   }
 
-  if (isPdfBytes(uploadBytes instanceof Uint8Array ? uploadBytes.buffer : uploadBytes)) {
+  if (isPdfBytes(uploadBytes)) {
     try {
       console.log(`[YS-SIGNER] Normalisation A4 du document "${fileName}"`);
-      uploadBytes = await normalizePdfToA4(uploadBytes instanceof Uint8Array ? uploadBytes.buffer : uploadBytes);
+      uploadBytes = await normalizePdfToA4(uploadBytes);
     } catch (err) {
       console.warn(`[YS-SIGNER] Normalisation A4 échouée pour "${fileName}", envoi brut:`, err);
     }
