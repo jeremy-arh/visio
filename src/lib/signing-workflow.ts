@@ -406,6 +406,8 @@ export async function advanceSigningWorkflow(
     notaryRows = context.signatures.filter((s) => s.role === "notary");
   }
 
+  if (!context.currentDocument) return context;
+
   if (context.currentDocument.status === "pending_signers" && allSignersSigned) {
     const nextDocStatus: SessionWorkflowStatus = allNotariesSigned ? "completed" : "pending_notary";
     await supabase
