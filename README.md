@@ -1,84 +1,36 @@
-# My Notary — Outil de notarisation à distance
+# Visio — Application signataire (client session)
 
-## Setup complet (5 minutes)
+**Ce dépôt contient uniquement** l’app Next.js côté **signataire** : KYC, salle d’attente, visio Daily, signature YouSign.
 
-### 1. Installer les dépendances
+- **Dashboard notaire / outil notaire** : dépôt séparé — [jeremy-arh/notary](https://github.com/jeremy-arh/notary). Ne pas y mélanger ni cloner dans ce repo.
+- **Schéma base de données / migrations SQL** : appliqués dans le projet Supabase (ou autre dépôt dédié), pas versionnés ici.
+
+## Prérequis
 
 ```bash
 npm install
 ```
 
-### 2. Configurer Supabase
+Copiez `.env.example` vers `.env.local` et renseignez les variables (Supabase, JWT, URL app, etc.).
 
-1. Créez un projet sur [supabase.com](https://supabase.com)
-2. Copiez `.env.example` vers `.env.local`
-3. Renseignez vos clés Supabase dans `.env.local` :
-
-```env
-NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=xxx
-SUPABASE_SERVICE_ROLE_KEY=xxx
-JWT_SECRET=une-cle-secrete-min-32-caracteres
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-```
-
-### 3. Créer les tables et données
-
-Dans le **SQL Editor** du dashboard Supabase, exécutez le contenu du fichier :
-
-```
-supabase/setup_complet.sql
-```
-
-Ce script crée les tables (notaries, notarization_sessions, session_signers) et insère les données de test.
-
-### 4. Lancer l'application
+## Développement
 
 ```bash
 npm run dev
 ```
 
-Ouvrez [http://localhost:3000](http://localhost:3000)
+L’app écoute le port **3011** (voir `package.json`).
 
-### 5. Tester
+## Flux signataire (aperçu)
 
-Cliquez sur **"Démarrer une session de test"** → vous êtes redirigé vers le flux KYC → Confirmer identité → Salle d'attente.
+1. Accueil / session de test → KYC (Veriff si activé)  
+2. Salle d’attente → Room (visio + document + signature)  
+3. Page terminée / téléchargements selon configuration  
 
----
+## API utiles (extraits)
 
-## Flux signataire
+- `POST /api/session/create` — création de session  
+- Routes sous `/api/session/[sessionId]/…` — état de signature, document, YouSign, audit, etc.  
+- KYC : `/api/kyc/*`  
 
-1. **Accueil** → "Démarrer une session de test" (crée une session et redirige)
-2. **KYC** → Confirmer mon identité
-3. **Salle d'attente** → Realtime sur le statut
-4. **Room** → Visio + document + signature (quand configuré)
-5. **Terminé** → Téléchargement du document signé
-
-## Vérification d'identité (Veriff)
-
-Pour activer la vérification d'identité via Veriff :
-
-1. Créez un compte sur [Veriff](https://veriff.com) et une intégration
-2. Ajoutez dans `.env.local` :
-
-```env
-NEXT_PUBLIC_VERIFF_ENABLED=true
-VERIFF_API_KEY=votre-api-key
-VERIFF_API_URL=https://stationapi.veriff.com
-VERIFF_WEBHOOK_SECRET=votre-shared-secret
-```
-
-3. Dans le **Veriff Customer Portal** → Intégrations → Settings :
-   - **Webhook decisions URL** : `https://votre-domaine.com/api/kyc/webhook`
-   - En local : utilisez [ngrok](https://ngrok.com) pour exposer votre serveur et configurer l’URL du webhook
-
-4. Exécutez la migration `supabase/migrations/20240310000003_add_veriff_session_id.sql` si ce n’est pas déjà fait (ou `setup_complet.sql` qui inclut tout)
-
-Le flux KYC affichera alors le bouton « Lancer la vérification Veriff » et l’embedd Veriff InContext. La décision (approved/declined) est reçue via le webhook et met à jour automatiquement `kyc_status` et le statut de la session.
-
-## API
-
-- `POST /api/session/create` — Création session (order_id, signers, document_url, notary_id)
-- `GET /api/test/create-session` — Crée une session de test et redirige vers le flux
-- `POST /api/kyc/veriff-session` — Crée une session Veriff et retourne l’URL (quand Veriff activé)
-- `POST /api/kyc/webhook` — Webhook Veriff pour recevoir les décisions (decision webhook)
+Pour Veriff, voir les variables `NEXT_PUBLIC_VERIFF_*` et `VERIFF_*` dans `.env.example` / documentation produit.

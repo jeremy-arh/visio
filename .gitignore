@@ -1,3 +1,6 @@
+# ── Dépôt : application signataire (Visio / client session) UNIQUEMENT.
+# Dashboard notaire : https://github.com/jeremy-arh/notary — ne jamais ajouter ici.
+
 .next/
 node_modules/
 
@@ -5,13 +8,10 @@ node_modules/
 .env.local
 .env.*.local
 
-# Notary dashboard app lives in https://github.com/jeremy-arh/notary (clone alongside this repo).
 notary-dashboard/
 
-/supabase/*
-!/supabase/migrations/
-/supabase/migrations/*
-!/supabase/migrations/20260315000000_add_document_signature_workflow.sql
+# Schéma SQL / migrations : gérés côté projet Supabase ou dépôt backend, pas dans ce client.
+supabase/
 
 npm-debug.log*
 yarn-debug.log*
