@@ -11,6 +11,14 @@ import { logAuditEvent } from "@/lib/audit";
 import { PDFDocument } from "pdf-lib";
 import { normalizePdfToA4, isPdfBytes } from "@/lib/pdf-normalize";
 
+/** Copie en BlobPart compatible TS strict (évite Uint8Array<ArrayBufferLike> dans `new Blob([…])`). */
+function toBlobPart(data: ArrayBuffer | Uint8Array): BlobPart {
+  if (data instanceof ArrayBuffer) return data;
+  const copy = new Uint8Array(data.byteLength);
+  copy.set(data);
+  return copy;
+}
+
 const sanitizeYousignBase = (raw?: string) => {
   const value = (raw || "").trim().replace(/\/+$/, "");
   if (!value) return "https://api-sandbox.yousign.app/v3";
@@ -293,7 +301,7 @@ async function initYousign(params: {
   }
 
   const formData = new FormData();
-  formData.append("file", new Blob([uploadBytes], { type: "application/pdf" }), fileName);
+  formData.append("file", new Blob([toBlobPart(uploadBytes)], { type: "application/pdf" }), fileName);
   formData.append("nature", "signable_document");
   formData.append("parse_anchors", "false");
 

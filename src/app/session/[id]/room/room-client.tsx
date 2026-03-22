@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback, type ReactNode } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -67,20 +68,22 @@ function VideoTile({
   const audioRef = useRef<HTMLAudioElement>(null);
 
   useEffect(() => {
-    if (videoRef.current && videoTrack) {
-      videoRef.current.srcObject = new MediaStream([videoTrack]);
+    const videoEl = videoRef.current;
+    if (videoEl && videoTrack) {
+      videoEl.srcObject = new MediaStream([videoTrack]);
     }
     return () => {
-      if (videoRef.current) videoRef.current.srcObject = null;
+      if (videoEl) videoEl.srcObject = null;
     };
   }, [videoTrack]);
 
   useEffect(() => {
-    if (audioRef.current && audioTrack && !isLocal) {
-      audioRef.current.srcObject = new MediaStream([audioTrack]);
+    const audioEl = audioRef.current;
+    if (audioEl && audioTrack && !isLocal) {
+      audioEl.srcObject = new MediaStream([audioTrack]);
     }
     return () => {
-      if (audioRef.current) audioRef.current.srcObject = null;
+      if (audioEl) audioEl.srcObject = null;
     };
   }, [audioTrack, isLocal]);
 
@@ -807,7 +810,7 @@ export function RoomClient({
       if (realtimeDebounceRef.current) clearTimeout(realtimeDebounceRef.current);
       if (channel) supabase.removeChannel(channel);
     };
-  }, [sessionId]);
+  }, [sessionId, toast]);
 
   // La page « terminée » uniquement après clôture explicite par le notaire (status DB = completed).
   // signing_flow_status === "completed" signifie seulement « plus de document à signer », pas fin de session.
@@ -1034,7 +1037,7 @@ export function RoomClient({
       clearInterval(auditInterval);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [sessionId, signerId, token, isNotary, signingFlowStatus]);
+  }, [sessionId, signerId, token, isNotary, signingFlowStatus, toast]);
 
   useEffect(() => {
     // Attendre que le signataire ait positionné sa signature avant de charger YouSign
@@ -1289,7 +1292,7 @@ export function RoomClient({
       callRef.current = null;
       call.leave().then(() => call.destroy());
     };
-  }, [liveRoomUrl, updateParticipants, signerId, signers]);
+  }, [liveRoomUrl, updateParticipants, signerId, signers, sessionId, token]);
 
   const toggleVideo = () => {
     if (callRef.current) {
@@ -1369,9 +1372,12 @@ export function RoomClient({
         {/* Zone scrollable */}
         <div className="flex-1 overflow-y-auto flex flex-col gap-4 min-h-0 pb-2">
           <div className="px-1">
-            <img
+            <Image
               src={MY_NOTARY_LOGO_SRC}
               alt="MyNotary"
+              width={200}
+              height={24}
+              unoptimized
               className="h-6 w-auto"
             />
             {workflowLabel && (

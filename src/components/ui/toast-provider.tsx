@@ -1,6 +1,14 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 type ToastType = "success" | "error" | "info" | "warning";
 
@@ -69,12 +77,15 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     [dismiss]
   );
 
-  const ctx: ToastContextValue = {
-    success: (t, o) => add("success", t, o),
-    error:   (t, o) => add("error",   t, o),
-    info:    (t, o) => add("info",    t, o),
-    warning: (t, o) => add("warning", t, o),
-  };
+  const ctx = useMemo<ToastContextValue>(
+    () => ({
+      success: (t, o) => add("success", t, o),
+      error: (t, o) => add("error", t, o),
+      info: (t, o) => add("info", t, o),
+      warning: (t, o) => add("warning", t, o),
+    }),
+    [add]
+  );
 
   return (
     <ToastContext.Provider value={ctx}>
