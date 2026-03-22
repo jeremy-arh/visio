@@ -229,7 +229,15 @@ export async function loadSigningContext(
         const signerRows = ((signers || []) as SessionSignerRow[])
           .slice()
           .sort((a, b) => a.order - b.order);
-        const signatureRows = signerRows.map((signer, idx) => ({
+        /** Lignes d'insert bootstrap : signataires (session_signer_id requis) ou notaire (null + notary_id). */
+        const signatureRows: Array<{
+          session_document_id: string;
+          session_signer_id: string | null;
+          role: "signer" | "notary";
+          signature_order: number;
+          status: string;
+          notary_id?: string | null;
+        }> = signerRows.map((signer, idx) => ({
           session_document_id: createdDoc.id,
           session_signer_id: signer.id,
           role: "signer" as const,
@@ -240,16 +248,10 @@ export async function loadSigningContext(
           signatureRows.push({
             session_document_id: createdDoc.id,
             session_signer_id: null,
-            role: "notary" as const,
+            role: "notary",
             notary_id: resolvedSession.notary_id,
             signature_order: signerRows.length,
             status: "pending",
-          } as unknown as {
-            session_document_id: string;
-            session_signer_id: string | null;
-            role: "signer" | "notary";
-            signature_order: number;
-            status: string;
           });
         }
         if (signatureRows.length > 0) {
