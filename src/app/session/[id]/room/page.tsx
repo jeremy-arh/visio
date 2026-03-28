@@ -124,10 +124,15 @@ export default async function RoomPage({
 
   if (!session) redirect("/");
 
+  // Si la session est déjà terminée, rediriger directement vers la page de fin
+  if (session.status === "completed") {
+    redirect(`/session/${id}/completed${token ? `?token=${encodeURIComponent(token)}` : ""}`);
+  }
+
   const initialDocuments = await fetchInitialDocuments(session);
 
   return (
-    <main className="flex min-h-screen flex-col p-4 bg-[#F9FAFB]">
+    <main className="h-screen overflow-hidden bg-[#111213]">
         <RoomClient
           sessionId={id}
           isNotary={role === "notary"}

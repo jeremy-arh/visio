@@ -15,6 +15,8 @@ export type AuditEventType =
   | "video_room_created"
   | "video_joined"
   | "video_left"
+  | "video_screen_share_started"
+  | "video_screen_share_stopped"
   | "video_recording_started"
   | "video_recording_stopped"
   // Signing flow

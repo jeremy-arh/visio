@@ -6,6 +6,8 @@ import { logAuditEvent, extractRequestMeta, type AuditEventType } from "@/lib/au
 const ALLOWED_CLIENT_EVENTS: AuditEventType[] = [
   "video_joined",
   "video_left",
+  "video_screen_share_started",
+  "video_screen_share_stopped",
   "video_recording_started",
   "video_recording_stopped",
   "signing_flow_started",
